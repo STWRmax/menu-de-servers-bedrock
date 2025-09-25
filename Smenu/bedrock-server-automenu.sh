@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ================== CONFIGURACIÓN AUTOMÁTICA ==================
+# ================== CONFIGURACIÓN ==================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="$SCRIPT_DIR/backups"
+STATUS_FILE="$BACKUP_DIR/backup_status.log"
 
 BDS_BIN="$SERVER_DIR/bedrock_server"
 SESSION="bedrock"
@@ -62,31 +63,46 @@ detener_servidor(){
 }
 reiniciar_servidor(){ detener_servidor; sleep 2; iniciar_con_terminal_nueva; }
 
+# ================== ESTADO DE COPIAS ==================
+update_status() {
+  local tipo="$1"    # daily o terabox
+  local mensaje="$2" # ej: "2025-09-27 00:00 OK"
+  mkdir -p "$BACKUP_DIR"
+  grep -v "^$tipo=" "$STATUS_FILE" 2>/dev/null > "$STATUS_FILE.tmp" || true
+  echo "$tipo=$mensaje" >> "$STATUS_FILE.tmp"
+  mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+}
+
+get_status() {
+  local tipo="$1"
+  grep "^$tipo=" "$STATUS_FILE" 2>/dev/null | cut -d= -f2-
+}
+
 # ================== COPIAS DE SEGURIDAD ==================
-# Copia diaria (1 archivo fijo local)
-copia_diaria(){
+copia_diaria() {
   local DEST="$BACKUP_DIR/backup_daily.tar.gz"
-  echo "[INFO] Creando copia diaria..."
   tar -C "$SERVER_DIR/worlds" -czf "$DEST" "$WORLD_NAME"
+  local fecha="$(date '+%F %H:%M')"
+  local size="$(du -h "$DEST" | cut -f1)"
+  update_status "daily" "$fecha ($size)"
   echo "[INFO] Copia diaria lista → $DEST"
 }
 
-# Copia 6h (1 local fijo + subida con fecha a Terabox)
-copia_6h(){
+copia_6h() {
   local DEST="$BACKUP_DIR/backup_6h.tar.gz"
   local REMOTE_NAME="backup_6h_$(date '+%F_%H').tar.gz"
 
-  echo "[INFO] Creando copia 6h local..."
   tar -C "$SERVER_DIR/worlds" -czf "$DEST" "$WORLD_NAME"
-  echo "[INFO] Copia 6h local lista → $DEST"
+  local fecha="$(date '+%F %H:%M')"
+  local size="$(du -h "$DEST" | cut -f1)"
+  local nube="NO SUBIDO"
 
   if have rclone; then
-    echo "[INFO] Subiendo copia a Terabox como $REMOTE_NAME ..."
-    rclone copy "$DEST" "terabox:/mcbedrock_backups/$REMOTE_NAME"
-    echo "[INFO] Subida completada."
-  else
-    echo "[WARN] rclone no está instalado/configurado. No se subió a Terabox."
+    rclone copy "$DEST" "terabox:/mcbedrock_backups/$REMOTE_NAME" && nube="OK"
   fi
+
+  update_status "terabox" "$fecha ($size) → nube: $nube"
+  echo "[INFO] Copia 6h lista → $DEST"
 }
 
 mostrar_copias(){
@@ -113,6 +129,29 @@ restaurar_copia(){
   tar -C "$SERVER_DIR/worlds" -xzf "$ARCHIVO"
   echo -e "${verde}✅ Restauración completa.${neutro}"
   iniciar_con_terminal_nueva
+}
+
+# ================== CRON ==================
+activar_cron_daily() {
+  local CMD="0 0 * * * $SCRIPT_DIR/$(basename "$0") --auto-daily"
+  { crontab -l 2>/dev/null | grep -v "auto-daily"; echo "$CMD"; } | crontab -
+  echo "✅ Autocopia diaria ACTIVADA (00:00)"
+}
+
+desactivar_cron_daily() {
+  crontab -l 2>/dev/null | grep -v "auto-daily" | crontab - || true
+  echo "❌ Autocopia diaria DESACTIVADA"
+}
+
+activar_cron_6h() {
+  local CMD="0 */6 * * * $SCRIPT_DIR/$(basename "$0") --auto-6h"
+  { crontab -l 2>/dev/null | grep -v "auto-6h"; echo "$CMD"; } | crontab -
+  echo "✅ Autocopia 6h Terabox ACTIVADA"
+}
+
+desactivar_cron_6h() {
+  crontab -l 2>/dev/null | grep -v "auto-6h" | crontab - || true
+  echo "❌ Autocopia 6h Terabox DESACTIVADA"
 }
 
 # ================== BATERÍA ==================
@@ -149,18 +188,29 @@ submenu_copias(){
   while true; do
     echo ""
     echo "====== Submenú Copias de Seguridad ======"
-    echo "1) Crear copia diaria (backup_daily)"
-    echo "2) Crear copia 6h + subida a Terabox (backup_6h)"
-    echo "3) Mostrar copias locales"
-    echo "R) Restaurar copia"
-    echo "B) Volver"
+    echo ""
+    echo "--- Copias locales 💾 ---"
+    echo "1) Crear copia manual ahora"
+    echo "2) Activar copia diaria (00:00)"
+    echo "3) Desactivar copia diaria"
+    echo ""
+    echo "--- Copias Terabox ☁️ ---"
+    echo "4) Activar copia cada 6h"
+    echo "5) Desactivar copia cada 6h"
+    echo "6) Forzar copia y subida ahora"
+    echo "7) Ver estado de Terabox"
+    echo ""
+    echo "B) Volver al menú principal"
     echo "========================================="
     read -r -p "Opción: " sub
     case $sub in
       1) copia_diaria ;;
-      2) copia_6h ;;
-      3) mostrar_copias ;;
-      R|r) restaurar_copia ;;
+      2) activar_cron_daily ;;
+      3) desactivar_cron_daily ;;
+      4) activar_cron_6h ;;
+      5) desactivar_cron_6h ;;
+      6) copia_6h ;;
+      7) get_status terabox || echo "Nunca" ;;
       B|b) break ;;
       *) echo "❌ Opción inválida." ;;
     esac
@@ -170,32 +220,55 @@ submenu_copias(){
 # ================== ESTADO GENERAL ==================
 estado_servidor(){
   echo -e "\n========== ${verde}ESTADO GENERAL${neutro} =========="
-  if is_running; then echo -e "🟢 Servidor: ${verde}EN EJECUCIÓN${neutro}"; else echo -e "🔴 Servidor: ${rojo}DETENIDO${neutro}"; fi
+  if is_running; then echo -e "🟢 Servidor: ${verde}EN EJECUCIÓN${neutro} (sesión: $SESSION)"; else echo -e "🔴 Servidor: ${rojo}DETENIDO${neutro}"; fi
   echo "🌍 Mundo: $WORLD_NAME"
   echo "🎮 Dificultad: $(awk -F= '/^difficulty=/{print $2}' "$SERVER_DIR/server.properties")"
 
   local mode=$(awk -F= '/^game.?mode=/{print $2}' "$SERVER_DIR/server.properties")
   case "$mode" in
-    0|"survival")  mode="Survival" ;;
-    1|"creative")  mode="Creative" ;;
-    2|"adventure") mode="Adventure" ;;
-    3|"spectator") mode="Spectator" ;;
-    *)             mode="Desconocido" ;;
+    0|"survival")  mode="survival" ;;
+    1|"creative")  mode="creative" ;;
+    2|"adventure") mode="adventure" ;;
+    3|"spectator") mode="spectator" ;;
+    *)             mode="desconocido" ;;
   esac
   echo "🎮 Modo: $mode"
+  echo ""
+
+  echo "💾 Copia diaria local:"
+  local daily="$(get_status daily || echo 'Nunca')"
+  echo "   Última actualización: $daily"
 
   echo ""
-  echo "💾 Backups en local:"
-  if ls "$BACKUP_DIR"/*.tar.gz >/dev/null 2>&1; then
-    ls -lh "$BACKUP_DIR"
+  echo "☁️ Copia 6h Terabox:"
+  local tbox="$(get_status terabox || echo 'Nunca')"
+  echo "   Última actualización: $tbox"
+
+  if crontab -l 2>/dev/null | grep -q "auto-daily"; then
+    echo "⏰ Autocopia local diaria: ACTIVADA (00:00)"
   else
-    echo "No hay copias."
+    echo "⏰ Autocopia local diaria: DESACTIVADA"
+  fi
+
+  if crontab -l 2>/dev/null | grep -q "auto-6h"; then
+    echo "☁️ Autocopia Terabox 6h: ACTIVADA"
+  else
+    echo "☁️ Autocopia Terabox 6h: DESACTIVADA"
   fi
 
   echo ""
   echo "🔋 Batería: $(bateria_nivel)% | Protección: $BAT_MODE"
   echo -e "===========================================\n"
 }
+
+# ================== MODO AUTO (CRON) ==================
+if [[ "${1:-}" == "--auto-daily" ]]; then
+  copia_diaria
+  exit 0
+elif [[ "${1:-}" == "--auto-6h" ]]; then
+  copia_6h
+  exit 0
+fi
 
 # ================== MENÚ PRINCIPAL ==================
 while true; do
