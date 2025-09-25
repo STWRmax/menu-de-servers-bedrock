@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Gestionar Servidor Minecraft
+Comment=Panel de administración del servidor Bedrock
+Exec=bash -c '"$(dirname "$(readlink -f "%k")")/Smenu/bedrock-server-automenu.sh"'
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Utility;Game;
