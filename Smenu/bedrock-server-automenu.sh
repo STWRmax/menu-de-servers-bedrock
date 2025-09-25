@@ -184,9 +184,15 @@ estado_servidor(){
   esac
   echo "🎮 Modo: $mode"
 
+  echo ""
   echo "💾 Backups en local:"
-  ls -lh "$BACKUP_DIR" || echo "No hay copias."
+  if ls "$BACKUP_DIR"/*.tar.gz >/dev/null 2>&1; then
+    ls -lh "$BACKUP_DIR"
+  else
+    echo "No hay copias."
+  fi
 
+  echo ""
   echo "🔋 Batería: $(bateria_nivel)% | Protección: $BAT_MODE"
   echo -e "===========================================\n"
 }
