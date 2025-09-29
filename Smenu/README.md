@@ -1,94 +1,151 @@
-# 🟩 Bedrock Server AutoMenu
+# 🟢 Menu de Servidor Minecraft Bedrock
 
-**Bedrock Server AutoMenu** es un script en **Bash** que provee un **menú interactivo** para gestionar un servidor de **Minecraft Bedrock** en Linux.
-
-Incluye funciones de:
-- Iniciar / detener / reiniciar el servidor.
-- Copias de seguridad automáticas (locales y en Terabox vía `rclone`).
-- Restaurar copias.
-- Protección por batería (apaga el server al 15%, reinicia al 50%).
-- Submenús organizados para facilitar la administración.
+Un script en **Bash** para administrar un servidor de **Minecraft Bedrock Edition** en Linux.
+Permite iniciar, detener, reiniciar, hacer copias de seguridad automáticas, monitorear batería y subir copias a **MEGA** en segundo plano.
 
 ---
 
-## 📂 Estructura recomendada de carpetas
+## 🚀 Características
 
-Coloca la carpeta **Smenu** **dentro** de tu servidor Bedrock:
-
-Server-Minecraft-Bedrock/
-├── bedrock_server
-├── server.properties
-├── worlds/
-├── resource_packs/
-├── behavior_packs/
-├── ...
-└── Smenu/                 <-------------------------------------
-├── bedrock-server-automenu.sh
-├── minecraft-server.desktop
-├── LICENSE
-├── README.md
-└── backups/
-
-📌 Esto asegura que el script detecte el servidor automáticamente y que todas las copias se guarden en `Smenu/backups`.
+* Inicia, detiene y reinicia el servidor fácilmente.
+* Consola integrada (en **tmux**, **screen** o terminal normal).
+* Menú visual con opciones numeradas.
+* Copias de seguridad automáticas cada hora.
+* Subida de copias a **MEGA** en segundo plano.
+* Monitor de batería con apagado preventivo.
+* Restauración rápida de mundos desde las copias.
 
 ---
 
-## 🚀 Uso rápido
+## 📦 Dependencias
 
-1. Da permisos de ejecución al script:
+El script puede funcionar con distintos niveles de integración:
 
-   ```bash
-   chmod +x Smenu/bedrock-server-automenu.sh
+### 🔹 Recomendadas
 
+* `tmux` → sesiones persistentes (autoguardado, batería, consola).
+* `megatools` → subir copias automáticas a MEGA.
 
-./Smenu/bedrock-server-automenu.sh
+### 🔹 Alternativas
 
-También puedes abrir el archivo .desktop incluido (minecraft-server.desktop) para lanzar el menú en una terminal.
+* `screen` → usado si no existe `tmux`.
+* `upower` o `acpi` → para leer nivel de batería.
 
-📌 Opciones principales del menú
+### 🔹 Instalación en Debian/Ubuntu
 
-0 → Iniciar servidor con consola
+```bash
+sudo apt update
+sudo apt install tmux megatools upower
+```
 
-2 → Detener servidor
+En Fedora:
 
-3 → Reiniciar servidor
+```bash
+sudo dnf install tmux megatools upower
+```
 
-4 → Estado general (muestra backups, batería, modo de juego, etc.)
+En Arch:
 
-B → Submenú de batería (proteger contra apagados inesperados)
+```bash
+sudo pacman -S tmux megatools upower
+```
 
-C → Submenú de copias de seguridad
+---
 
-R → Restaurar copia
+## ⚙️ Uso
 
-Q → Salir
+Clona el repositorio y dale permisos al script:
 
-🔋 Submenú de batería
+```bash
+git clone https://github.com/STWRmax/menu-de-servers-bedrock.git
+cd menu-de-servers-bedrock/Smenu
+chmod +x bedrock-server-automenu.sh
+./bedrock-server-automenu.sh
+```
 
-Activar protección (apagar al 15%, encender al 50%).
+---
 
-Activar solo apagado (apaga al 15% y no reinicia).
+## 📂 Estructura esperada
 
-Desactivar protección.
+```
+Smenu/
+ ├── bedrock-server-automenu.sh
+ ├── bedrock_server
+ ├── server.properties
+ ├── worlds/
+ │    └── <tu_mundo>
+ └── backups/
+```
 
-Ver estado actual de la batería.
+---
 
-💾 Submenú de copias de seguridad
+## 📋 Menú principal
 
-Crear copia del mundo.
+```
+========== Menú Servidor Minecraft Bedrock ==========
+1) Iniciar servidor con consola
+2) Detener servidor
+3) Reiniciar servidor
+4) Estado general
+5) Menú de batería ⚡
+6) Menú de copias 💾
+7) Restaurar una copia
+Q) Salir
+=====================================================
+```
 
-Mostrar últimas 10 copias.
+---
 
-Eliminar copias antiguas (mantener 4 más recientes).
+## 💾 Copias de seguridad
 
-Activar copias automáticas cada 24h o cada 6h (con opción de subida a Terabox vía rclone).
+En el **submenú de copias** podrás:
 
-🎮 Requisitos
+1. Crear copia local del mundo.
+2. Mostrar últimas 10 copias.
+3. Eliminar copias viejas (mantener 4 recientes).
+4. Iniciar autoguardado en segundo plano.
+5. Subir última copia a MEGA ☁️.
+6. Listar copias en MEGA 📂.
 
-Linux con bash.
+### 🔹 Copias automáticas
 
-screen o tmux.
+* Si tienes **tmux** y **megatools**, cada copia creada se subirá automáticamente a MEGA.
+* Si no está megatools → la copia se guarda localmente y se muestra un aviso.
 
-upower o acpi (para control de batería).
+---
 
-rclone (si deseas enviar copias a Terabox).
+## 🔋 Batería
+
+* Protege contra apagados inesperados.
+* Modos:
+
+  * **Auto** → apaga al 15%, vuelve a encender al 50%.
+  * **Solo apagado** → apaga al 15%.
+  * **Off** → sin protección.
+* Monitor en segundo plano disponible con `tmux`.
+
+---
+
+## 🌍 Estado General
+
+Con la opción 4 puedes ver:
+
+* Estado del servidor (🟢 en ejecución / 🔴 detenido).
+* Nombre del mundo.
+* Dificultad y modo de juego.
+* Número de copias locales y su tamaño.
+* Estado del autoguardado (tmux o crontab).
+* Estado del monitor de batería.
+* Nivel de batería actual (si hay utilidades instaladas).
+
+---
+
+## 🤝 Contribuciones
+
+¡Bienvenidas! Puedes enviar PR o abrir issues con mejoras.
+
+---
+
+## 📜 Licencia
+
+Este proyecto es libre y de uso educativo.
