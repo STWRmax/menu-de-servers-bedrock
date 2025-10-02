@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+LOG_FILE="$BASE_DIR/server.log"
 
+log(){
+  local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+  echo -e "$msg" | tee -a "$LOG_FILE"
+}
 # ========== DETECTAR RUTA BASE ==========
 BASE_DIR="$(dirname "$(readlink -f "$0")")"
 cd "$BASE_DIR" || exit 1
@@ -8,6 +13,29 @@ cd "$BASE_DIR" || exit 1
 # ========== CONFIGURACIÓN ==========
 # Buscar carpeta padre de Smenu
 PARENT_DIR="$(dirname "$BASE_DIR")"
+
+# Crear config.sh si no existe
+if [[ ! -f "$BASE_DIR/config.sh" ]]; then
+  cat > "$BASE_DIR/config.sh" <<'EOF'
+# ========= CONFIGURACIÓN AUTO-GENERADA =========
+AUTOBKP_ENABLED="off"
+AUTOBKP_INTERVAL=3600
+UPLOAD_TO_MEGA="off"
+MEGA_REMOTE_DIR="/MinecraftBackups"
+BAT_MODE="off"
+BAT_LOW=15
+BAT_ON=50
+EOF
+  echo "⚙️  Archivo config.sh generado con valores por defecto en $BASE_DIR"
+fi
+
+# Cargar configuración desde config.sh
+source "$BASE_DIR/config.sh"
+
+# Cargar .env si existe (sobrescribe valores de config.sh)
+if [[ -f "$BASE_DIR/.env" ]]; then
+  export $(grep -v '^#' "$BASE_DIR/.env" | xargs)
+fi
 
 # Si existe el binario en el padre
 if [ -x "$PARENT_DIR/bedrock_server" ]; then
@@ -22,6 +50,13 @@ else
     echo "❌ No se encontró bedrock_server ni en el directorio padre ni en /home"
     exit 1
   fi
+fi
+# Validar permisos de ejecución
+if [[ ! -x "$BDS_BIN" ]]; then
+  echo -e "${rojo}⚠ El servidor no es ejecutable.${neutro}"
+  echo "   Solución rápida:"
+  echo "   chmod +x \"$BDS_BIN\""
+  exit 1
 fi
 
 SESSION="bedrock"
