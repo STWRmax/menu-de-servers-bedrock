@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# ========== DETECTAR RUTA BASE ==========
+BASE_DIR="$(dirname "$(readlink -f "$0")")"
+cd "$BASE_DIR" || exit 1
+
+# ========== LOG ==========
 LOG_FILE="$BASE_DIR/server.log"
 
 log(){
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
   echo -e "$msg" | tee -a "$LOG_FILE"
 }
+
 # ========== DETECTAR RUTA BASE ==========
 BASE_DIR="$(dirname "$(readlink -f "$0")")"
 cd "$BASE_DIR" || exit 1
