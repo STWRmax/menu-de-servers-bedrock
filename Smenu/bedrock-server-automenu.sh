@@ -91,15 +91,17 @@ have() { command -v "$1" >/dev/null 2>&1; }
 check_megatools() {
   if ! have megacopy; then
     echo "❌ megatools no está instalado."
-    echo "   Instálalo con:"
+    echo "   Instálalo con uno de estos:"
     echo "     sudo apt install megatools     # Debian/Ubuntu"
     echo "     sudo pacman -S megatools       # Arch"
     echo "     sudo dnf install megatools     # Fedora"
-    read -p 'Pulsa ENTER para continuar...'
+    echo ""
+    read -p "Pulsa ENTER para volver al submenú..." 
     return 1
   fi
   return 0
 }
+# ========== FUNCIONES SESSIÓN ==========
 
 choose_session() {
   if have tmux; then echo "tmux"
@@ -285,6 +287,23 @@ listar_backups_mega() {
   echo "📂 Copias disponibles en MEGA:"
   megals /MinecraftBackups/
 }
+configurar_mega(){
+  echo "⚙️ Configuración de MEGA"
+  read -p "Usuario (correo): " user
+  read -s -p "Contraseña: " pass
+  echo ""
+  
+  # Guardar en config.sh
+  sed -i '/^MEGA_USER=/d' "$BASE_DIR/config.sh"
+  sed -i '/^MEGA_PASS=/d' "$BASE_DIR/config.sh"
+  {
+    echo "MEGA_USER=\"$user\""
+    echo "MEGA_PASS=\"$pass\""
+  } >> "$BASE_DIR/config.sh"
+
+  echo "✅ Credenciales de MEGA guardadas en config.sh"
+  read -p "Pulsa ENTER para volver al submenú..."
+}
 
 # ===== Nivel de batería sin romper con pipefail =====
 bateria_nivel(){
@@ -324,75 +343,54 @@ monitor_bateria_tmux(){
 }
 
 # ========== SUBMENÚ COPIAS ==========
-autoguardado_tmux(){
-  if ! have tmux; then
-    echo "❌ tmux no está instalado. Instálalo con: sudo apt install tmux"
-    return
-  fi
+configurar_mega(){
+  echo "⚙️ Configuración de MEGA"
+  read -p "Usuario (correo): " user
+  read -s -p "Contraseña: " pass
+  echo ""
+  
+  # Guardar en config.sh
+  sed -i '/^MEGA_USER=/d' "$BASE_DIR/config.sh"
+  sed -i '/^MEGA_PASS=/d' "$BASE_DIR/config.sh"
+  {
+    echo "MEGA_USER=\"$user\""
+    echo "MEGA_PASS=\"$pass\""
+  } >> "$BASE_DIR/config.sh"
 
-  if tmux has-session -t autocopia 2>/dev/null; then
-    echo "ℹ️ La sesión 'autocopia' ya está corriendo."
-    return
-  fi
-
-  AUTOBKP_INTERVAL="${AUTOBKP_INTERVAL:-3600}"
-  SCRIPT_PATH_ESCAPED="$(printf "%q" "$(realpath "$0")")"
-
-  tmux new -d -s autocopia "
-    while true; do
-      # 1) Crear copia local
-      $SCRIPT_PATH_ESCAPED --backup
-
-      # 2) Subir la última copia a MEGA (si megatools está disponible)
-      latest=\$(ls -1t \"$BACKUP_DIR\"/*.tar.gz 2>/dev/null | head -n1)
-      if [ -n \"\$latest\" ]; then
-        if command -v megacopy >/dev/null 2>&1; then
-          echo \"☁️ Subiendo copia automática a MEGA: \$(basename \"\$latest\")\"
-          megacopy --reload --local \"\$latest\" --remote /MinecraftBackups/
-        else
-          echo \"⚠️ megatools no instalado, copia no subida a MEGA.\"
-        fi
-      fi
-
-      sleep $AUTOBKP_INTERVAL
-    done
-  "
-
-  echo -e "${verde}Autoguardado corriendo en segundo plano (tmux sesión: autocopia).${neutro}"
+  echo "✅ Credenciales de MEGA guardadas en config.sh"
+  read -p "Pulsa ENTER para volver al submenú..."
 }
+
 
 submenu_copias(){
   while true; do
     echo ""
     echo "====== Submenú Copias de Seguridad ======"
     echo "1) Crear copia del mundo"
-    echo "2) Mostrar últimas 10 copias"
-    echo "3) Eliminar copias (mantener 4 más recientes)"
-    echo "4) Iniciar autoguardado en segundo plano (tmux)"
+    echo "2) Abrir ubicación de copia"
+    echo "3) Eliminar copias (mantener 1 más reciente)"
+    echo "4) Iniciar autoguardado (24h local, 6h MEGA)"
     echo "5) Subir última copia a MEGA ☁️"
     echo "6) Listar copias en MEGA 📂"
+    echo "7) Configurar MEGA (usuario y pass)"
     echo "B) Volver"
     echo "========================================="
     read -r -p "Opción: " sub
     case $sub in
       1) copia_mundo ;;
-      2) mostrar_copias ;;
-      3) eliminar_copias ;;
-      4) autoguardado_tmux ;;
- 5)
-  latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)"
-  if [[ -n "$latest" ]]; then
-    subir_backup_mega "$latest" || echo "⚠️ No se pudo subir la copia a MEGA."
-  else
-    echo "❌ No hay copias locales."
-  fi
-  ;;
+      2) xdg-open "$BACKUP_DIR" 2>/dev/null || echo "❌ No se pudo abrir el gestor de archivos." ;;
+      3) eliminar_copias 1 ;; # Mantiene 1 sola
+      4) autoguardado_tmux ;; # Aquí ajustamos tiempos
+      5) latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1)"
+         [ -n "$latest" ] && subir_backup_mega "$latest" || echo "❌ No hay copias locales." ;;
       6) listar_backups_mega ;;
+      7) configurar_mega ;;
       B|b) break ;;
       *) echo "❌ Opción inválida." ;;
     esac
   done
 }
+
 
 # ========== SUBMENÚ BATERÍA ==========
 submenu_bateria(){
