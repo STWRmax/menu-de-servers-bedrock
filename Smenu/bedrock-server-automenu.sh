@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+
 # ========== DETECTAR RUTA BASE ==========
 BASE_DIR="$(dirname "$(readlink -f "$0")")"
 cd "$BASE_DIR" || exit 1
-
 # ========== LOG ==========
 LOG_FILE="$BASE_DIR/server.log"
 
@@ -188,8 +188,6 @@ detener_servidor(){
 reiniciar_servidor(){ detener_servidor; sleep 2; iniciar_con_terminal_nueva; }
 
 # ========== ESTADO ==========
-# (igual que en tu versión, solo corregido echo -e en autocopia/inactivo)
-# ========== ESTADO ==========
 estado_servidor(){
   echo -e "\n========== ${verde}ESTADO GENERAL${neutro} =========="
 
@@ -238,9 +236,9 @@ estado_servidor(){
 
   # 5. Estado batería
   if tmux has-session -t bateria 2>/dev/null; then
-    echo "🔋 Monitor batería: ${verde}ACTIVO (tmux: bateria)${neutro}"
+    echo -e "🔋 Monitor batería: ${verde}ACTIVO (tmux: bateria)${neutro}"
   else
-    echo "🔋 Monitor batería: ${rojo}INACTIVO${neutro}"
+    echo -e "🔋 Monitor batería: ${rojo}INACTIVO${neutro}"
   fi
 
   echo -e "===========================================\n"
@@ -266,13 +264,10 @@ listar_mundos(){
   done
 }
 
-# ========== FUNCIONES BACKUP ==========
-# (igual que las tuyas: copia_mundo, mostrar_copias, eliminar_copias, restaurar_copia)
-
 # ========== FUNCIONES MEGA ==========
 subir_backup_mega() {
   local file="$1"
-  check_megatools || return 0   # si no hay megatools, no cerrar script
+  check_megatools || return 0   # no cortes el script por faltar megatools
   if [[ -f "$file" ]]; then
     echo "☁️ Subiendo copia a MEGA: $(basename "$file")..."
     if megacopy --reload --local "$file" --remote "$MEGA_REMOTE_DIR/"; then
@@ -285,11 +280,47 @@ subir_backup_mega() {
   fi
 }
 
-
 listar_backups_mega() {
   check_megatools || return
   echo "📂 Copias disponibles en MEGA:"
   megals /MinecraftBackups/
+}
+
+# ===== Nivel de batería sin romper con pipefail =====
+bateria_nivel(){
+  local nivel=""
+  if have upower; then
+    # Busca un device de batería; si no hay, no rompe
+    local dev
+    dev="$(upower -e 2>/dev/null | grep -m1 -E 'BAT|battery' || true)"
+    if [[ -n "$dev" ]]; then
+      nivel="$(upower -i "$dev" 2>/dev/null | awk -F': *' '/percentage/{print $2}' | tr -d '%' || true)"
+    fi
+  elif have acpi; then
+    nivel="$(acpi -b 2>/dev/null | grep -oE '[0-9]+%' | head -n1 | tr -d '%' || true)"
+  fi
+  [[ -n "$nivel" ]] && printf '%s\n' "$nivel" || printf '%s\n' "N/A"
+}
+
+monitor_bateria_tmux(){
+  if ! have tmux; then echo "❌ tmux no está instalado."; return; fi
+  if tmux has-session -t bateria 2>/dev/null; then
+    echo "ℹ️ El monitor ya está corriendo (tmux: bateria)."; return
+  fi
+  # Bucle robusto dentro de tmux (no hereda tu set -euo pipefail)
+  tmux new -d -s bateria "
+    while true; do
+      dev=\$(upower -e 2>/dev/null | grep -m1 -E 'BAT|battery' || true)
+      if [ -n \"\$dev\" ]; then
+        lvl=\$(upower -i \"\$dev\" 2>/dev/null | awk -F': *' '/percentage/{print \$2}' | tr -d '%' || true)
+      else
+        lvl=N/A
+      fi
+      echo \"[\$(date '+%F %T')] 🔋 Batería: \$lvl%\"
+      sleep 60
+    done
+  " || true
+  echo "🔋 Monitor de batería corriendo (tmux: bateria)."
 }
 
 # ========== SUBMENÚ COPIAS ==========
@@ -348,15 +379,14 @@ submenu_copias(){
       2) mostrar_copias ;;
       3) eliminar_copias ;;
       4) autoguardado_tmux ;;
-     5)
-   latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)"
-   if [[ -n "$latest" ]]; then
-     subir_backup_mega "$latest" || echo "⚠️ No se pudo subir la copia a MEGA."
-   else
-     echo "❌ No hay copias locales."
-   fi
-   ;;
-
+ 5)
+  latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)"
+  if [[ -n "$latest" ]]; then
+    subir_backup_mega "$latest" || echo "⚠️ No se pudo subir la copia a MEGA."
+  else
+    echo "❌ No hay copias locales."
+  fi
+  ;;
       6) listar_backups_mega ;;
       B|b) break ;;
       *) echo "❌ Opción inválida." ;;
@@ -365,8 +395,34 @@ submenu_copias(){
 }
 
 # ========== SUBMENÚ BATERÍA ==========
-# (igual que en tu script)
-
+submenu_bateria(){
+  while true; do
+    echo ""
+    echo "========== Submenú Batería ⚡ =========="
+    echo "1) Activar protección (apagar ${BAT_LOW}%, encender ${BAT_ON}%)"
+    echo "2) Activar solo apagado (${BAT_LOW}%)"
+    echo "3) Desactivar protección"
+    echo "4) Mostrar estado batería"
+    echo "5) Iniciar monitor en segundo plano (tmux)"
+    echo "B) Volver"
+    echo "========================================"
+    read -r -p "Opción: " bat
+    case "$bat" in
+      1) BAT_MODE="auto"; echo "Modo auto activado." ;;
+      2) BAT_MODE="apagado"; echo "Modo solo apagado activado." ;;
+      3) BAT_MODE="off"; echo "Protección desactivada." ;;
+      4) lvl="$(bateria_nivel)"
+         if [[ "$lvl" == "N/A" ]]; then
+           echo "🔋 No se pudo leer el nivel de batería (sin batería o sin upower/acpi)."
+         else
+           echo "🔋 Nivel: $lvl% | Protección: $BAT_MODE"
+         fi ;;
+      5) monitor_bateria_tmux ;;
+      [Bb]) break ;;
+      *) echo "❌ Opción inválida." ;;
+    esac
+  done
+}
 # ========== MENÚ PRINCIPAL ==========
 while true; do
   echo ""
