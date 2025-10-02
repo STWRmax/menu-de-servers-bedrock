@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Gestionar Servidor Minecraft
-Comment=Panel de administración del servidor Bedrock
-Exec=bash -c 'BASE="$(dirname "$(readlink -f "%k")")"; if [ -f "$BASE/bedrock-server-automenu.sh" ]; then cd "$BASE"; ./bedrock-server-automenu.sh; elif [ -f "$BASE/Smenu/bedrock-server-automenu.sh" ]; then cd "$BASE/Smenu"; ./bedrock-server-automenu.sh; else echo "❌ No se encontró el script"; read; fi'
-Icon=utilities-terminal
-Terminal=true
-Type=Application
-Categories=Utility;Game;
