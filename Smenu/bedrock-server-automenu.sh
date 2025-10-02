@@ -6,10 +6,26 @@ BASE_DIR="$(dirname "$(readlink -f "$0")")"
 cd "$BASE_DIR" || exit 1
 
 # ========== CONFIGURACIÓN ==========
-SERVER_DIR="$BASE_DIR"
-BDS_BIN="$SERVER_DIR/bedrock_server"
+# Buscar carpeta padre de Smenu
+PARENT_DIR="$(dirname "$BASE_DIR")"
+
+# Si existe el binario en el padre
+if [ -x "$PARENT_DIR/bedrock_server" ]; then
+  SERVER_DIR="$PARENT_DIR"
+  BDS_BIN="$SERVER_DIR/bedrock_server"
+else
+  # Si no, buscar en /home
+  BDS_BIN="$(find /home -type f -name 'bedrock_server' -executable 2>/dev/null | head -n1 || true)"
+  if [ -n "$BDS_BIN" ]; then
+    SERVER_DIR="$(dirname "$BDS_BIN")"
+  else
+    echo "❌ No se encontró bedrock_server ni en el directorio padre ni en /home"
+    exit 1
+  fi
+fi
+
 SESSION="bedrock"
-BACKUP_DIR="$BASE_DIR/backups"
+BACKUP_DIR="$SERVER_DIR/backups"
 WORLD_NAME="$(awk -F= '/^level-name=/{print $2}' "$SERVER_DIR/server.properties" 2>/dev/null || echo 'STWR_SERVER')"
 
 # Configuración de batería
