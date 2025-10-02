@@ -169,11 +169,21 @@ autoguardado_tmux(){
     echo "❌ tmux no está instalado. Instálalo con: sudo apt install tmux"
     return
   fi
+
+  if tmux has-session -t autocopia 2>/dev/null; then
+    echo "ℹ️ La sesión 'autocopia' ya está corriendo."
+    return
+  fi
+
+  AUTOBKP_INTERVAL="${AUTOBKP_INTERVAL:-3600}"
+  SCRIPT_PATH_ESCAPED="$(printf "%q" "$(realpath "$0")")"
+
   tmux new -d -s autocopia "
     while true; do
-      # Crear copia local
-      $(realpath "$0") --backup
-      # Subir la última copia a MEGA (si está megatools)
+      # 1) Crear copia local
+      $SCRIPT_PATH_ESCAPED --backup
+
+      # 2) Subir la última copia a MEGA (si megatools está disponible)
       latest=\$(ls -1t \"$BACKUP_DIR\"/*.tar.gz 2>/dev/null | head -n1)
       if [ -n \"\$latest\" ]; then
         if command -v megacopy >/dev/null 2>&1; then
@@ -183,12 +193,13 @@ autoguardado_tmux(){
           echo \"⚠️ megatools no instalado, copia no subida a MEGA.\"
         fi
       fi
-      sleep 3600
+
+      sleep $AUTOBKP_INTERVAL
     done
   "
+
   echo -e "${verde}Autoguardado corriendo en segundo plano (tmux sesión: autocopia).${neutro}"
 }
-
 
 submenu_copias(){
   while true; do
