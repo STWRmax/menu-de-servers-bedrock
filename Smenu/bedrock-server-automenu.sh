@@ -318,6 +318,7 @@ while true; do
   echo "5) Menú de batería ⚡"
   echo "6) Menú de copias 💾"
   echo "7) Restaurar una copia"
+  echo "8) Listar mundos disponibles 🌍"
   echo "Q) Salir"
   echo "====================================================="
   read -r -p "Selecciona una opción: " opcion
@@ -329,6 +330,7 @@ while true; do
     5) submenu_bateria ;;
     6) submenu_copias ;;
     7) restaurar_copia ;;
+    8) listar_mundos ;;
     Q|q) echo "👋 Hasta luego."; break ;;
     *) echo "❌ Opción no válida." ;;
   esac
