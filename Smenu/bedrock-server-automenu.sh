@@ -61,7 +61,11 @@ fi
 
 SESSION="bedrock"
 BACKUP_DIR="$SERVER_DIR/backups"
-WORLD_NAME="$(awk -F= '/^level-name=/{print $2}' "$SERVER_DIR/server.properties" 2>/dev/null || echo 'STWR_SERVER')"
+WORLD_NAME="$(awk -F= '/^level-name=/{print $2}' "$SERVER_DIR/server.properties" 2>/dev/null)"
+if [[ -z "$WORLD_NAME" ]]; then
+  WORLD_NAME="$(basename "$(ls -d "$SERVER_DIR/worlds"/* 2>/dev/null | head -n1)")"
+fi
+[[ -z "$WORLD_NAME" ]] && WORLD_NAME="default"
 
 # Configuración de batería
 BAT_MODE="off"
