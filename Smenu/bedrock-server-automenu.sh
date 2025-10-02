@@ -41,8 +41,11 @@ source "$BASE_DIR/config.sh"
 
 # Cargar .env si existe (sobrescribe valores de config.sh)
 if [[ -f "$BASE_DIR/.env" ]]; then
-  export $(grep -v '^#' "$BASE_DIR/.env" | xargs)
+  set -a
+  source "$BASE_DIR/.env"
+  set +a
 fi
+
 
 # Si existe el binario en el padre
 if [ -x "$PARENT_DIR/bedrock_server" ]; then
@@ -269,15 +272,19 @@ listar_mundos(){
 # ========== FUNCIONES MEGA ==========
 subir_backup_mega() {
   local file="$1"
-  check_megatools || return
-  if [ -f "$file" ]; then
+  check_megatools || return 0   # si no hay megatools, no cerrar script
+  if [[ -f "$file" ]]; then
     echo "☁️ Subiendo copia a MEGA: $(basename "$file")..."
-    megacopy --reload --local "$file" --remote /MinecraftBackups/
-    [ $? -eq 0 ] && echo "✅ Copia subida a MEGA." || echo "❌ Error al subir la copia."
+    if megacopy --reload --local "$file" --remote "$MEGA_REMOTE_DIR/"; then
+      echo "✅ Copia subida a MEGA."
+    else
+      echo "❌ Error al subir la copia."
+    fi
   else
     echo "❌ El archivo de backup no existe: $file"
   fi
 }
+
 
 listar_backups_mega() {
   check_megatools || return
@@ -341,8 +348,15 @@ submenu_copias(){
       2) mostrar_copias ;;
       3) eliminar_copias ;;
       4) autoguardado_tmux ;;
-      5) latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1)"
-         [ -n "$latest" ] && subir_backup_mega "$latest" || echo "❌ No hay copias locales." ;;
+     5)
+   latest="$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)"
+   if [[ -n "$latest" ]]; then
+     subir_backup_mega "$latest" || echo "⚠️ No se pudo subir la copia a MEGA."
+   else
+     echo "❌ No hay copias locales."
+   fi
+   ;;
+
       6) listar_backups_mega ;;
       B|b) break ;;
       *) echo "❌ Opción inválida." ;;
