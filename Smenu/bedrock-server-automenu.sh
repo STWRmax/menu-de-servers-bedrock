@@ -140,6 +140,82 @@ reiniciar_servidor(){ detener_servidor; sleep 2; iniciar_con_terminal_nueva; }
 
 # ========== ESTADO ==========
 # (igual que en tu versión, solo corregido echo -e en autocopia/inactivo)
+# ========== ESTADO ==========
+estado_servidor(){
+  echo -e "\n========== ${verde}ESTADO GENERAL${neutro} =========="
+
+  # 1. Estado del servidor
+  if is_running; then
+    echo -e "🟢 Servidor: ${verde}EN EJECUCIÓN${neutro} (sesión: $SESSION)"
+  else
+    echo -e "🔴 Servidor: ${rojo}DETENIDO${neutro}"
+  fi
+
+  # 2. Info del mundo desde server.properties en el directorio padre de Smenu
+  local difficulty gamemode_raw gamemode
+  difficulty="$(awk -F= '/^difficulty=/{print $2}' "$SERVER_DIR/server.properties" 2>/dev/null || true)"
+  [[ -z "${difficulty:-}" ]] && difficulty="desconocida"
+
+  gamemode_raw="$(awk -F= '/^game.?mode=/{print $2}' "$SERVER_DIR/server.properties" 2>/dev/null || true)"
+  case "${gamemode_raw:-}" in
+    0|survival)  gamemode="survival" ;;
+    1|creative)  gamemode="creative" ;;
+    2|adventure) gamemode="adventure" ;;
+    3|spectator) gamemode="spectator" ;;
+    *)           gamemode="desconocido" ;;
+  esac
+
+  echo "🌍 Mundo: $WORLD_NAME"
+  echo "🎮 Dificultad: $difficulty"
+  echo "🎮 Modo: $gamemode"
+
+  # 3. Copias de seguridad
+  local count latest size_total
+  count="$(ls -1 "$BACKUP_DIR"/*.tar.gz 2>/dev/null | wc -l || true)"
+  echo "💾 Copias: ${count:-0}"
+  if [[ "${count:-0}" -gt 0 ]]; then
+    latest="$(basename "$(ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)")"
+    size_total="$(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1 || echo "0")"
+    echo "   Última: ${latest:-N/A}"
+    echo "   Tamaño total: ${size_total}"
+  fi
+
+  # 4. Estado autocopia
+  if tmux has-session -t autocopia 2>/dev/null; then
+    echo -e "⏰ Autocopia: ${verde}ACTIVADA (tmux: autocopia)${neutro}"
+  else
+    echo -e "⏰ Autocopia: ${rojo}DESACTIVADA${neutro}"
+  fi
+
+  # 5. Estado batería
+  if tmux has-session -t bateria 2>/dev/null; then
+    echo "🔋 Monitor batería: ${verde}ACTIVO (tmux: bateria)${neutro}"
+  else
+    echo "🔋 Monitor batería: ${rojo}INACTIVO${neutro}"
+  fi
+
+  echo -e "===========================================\n"
+}
+# ========== LISTAR MUNDOS ==========
+listar_mundos(){
+  local WORLDS_DIR="$SERVER_DIR/worlds"
+  if [[ ! -d "$WORLDS_DIR" ]]; then
+    echo "❌ No existe la carpeta de mundos en $WORLDS_DIR"
+    return
+  fi
+
+  echo "🌍 Mundos disponibles:"
+  for dir in "$WORLDS_DIR"/*; do
+    [[ -d "$dir" ]] || continue
+    local nombre="$(basename "$dir")"
+    if [[ -f "$dir/levelname.txt" ]]; then
+      local display_name="$(cat "$dir/levelname.txt")"
+      echo " - $nombre  (Nombre en juego: $display_name)"
+    else
+      echo " - $nombre"
+    fi
+  done
+}
 
 # ========== FUNCIONES BACKUP ==========
 # (igual que las tuyas: copia_mundo, mostrar_copias, eliminar_copias, restaurar_copia)
